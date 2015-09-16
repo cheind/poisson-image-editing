@@ -24,5 +24,21 @@
 
 namespace blend {
 
+    /* Seamless image cloning.
+
+       Copies the masked part of foreground onto background given the translational offset. Instead of copying 
+       foreground content naively, which often leading to visible seams, the algorithm uses a method devised in 
+
+       Pérez, Patrick, Michel Gangnet, and Andrew Blake. 
+       "Poisson image editing." ACM Transactions on Graphics (TOG). Vol. 22. No. 3. ACM, 2003
+
+       This method presented by Pérez et al. minimizes the squared error terms of the gradients of the composed 
+       image and vector guidance field. The vector guidance field is modeled as mixture of gradients of foreground 
+       and background image.
+
+    */
+    void seamlessImageCloning(cv::InputArray background, cv::InputArray foreground, cv::InputArray foregroundMask, int offsetX, int offsetY, cv::OutputArray destination);
+
+
 }
 #endif
