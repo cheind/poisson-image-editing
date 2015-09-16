@@ -48,11 +48,10 @@ namespace blend {
             for (int x = 0; x < width; ++x) {
                 if (!fgm(y, x)) {
                     v(y, x) = cv::Vec2f(bgGradX(y, x), bgGradY(y, x));
-                }
-                else {
+                } else {
                     cv::Vec2f bgGrad(bgGradX(y, x), bgGradY(y, x));
                     cv::Vec2f fgGrad(fgGradX(y, x), fgGradY(y, x));
-                    v(y, x) = (bgGrad.dot(bgGrad) > fgGrad.dot(fgGrad)) ? bgGrad : fgGrad;
+                    v(y, x) = (bgGrad.dot(bgGrad) > fgGrad.dot(fgGrad)) ? bgGrad : fgGrad;                 
                 }
             }
         }
@@ -120,6 +119,7 @@ namespace blend {
             }
         }
 
+        A.makeCompressed();
         Eigen::SparseLU<Eigen::SparseMatrix<float>> solver;
         solver.analyzePattern(A);
         solver.factorize(A);
@@ -145,7 +145,7 @@ namespace blend {
         cv::split(bg, bgChannels);
         cv::split(dst, dstChannels);
 
-        cv::Rect overlapAreaBg = cv::Rect(0, 0, bg.cols, bg.rows) | cv::Rect(offsetX, offsetY, fg.cols, fg.rows);
+        cv::Rect overlapAreaBg = cv::Rect(0, 0, bg.cols, bg.rows) & cv::Rect(offsetX, offsetY, fg.cols, fg.rows);
         cv::Rect overlapAreaFg = cv::Rect(0, 0, std::min<int>(overlapAreaBg.width, fg.cols), std::min<int>(overlapAreaBg.height, fg.rows));
 
         // For each channel independendly solve the linear poisson equations with boundary conditions.
@@ -170,6 +170,8 @@ namespace blend {
                 }
             }
         }
+
+        cv::merge(dstChannels, dst);
 
     }
 }

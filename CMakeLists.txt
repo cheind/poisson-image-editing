@@ -24,5 +24,5 @@ target_link_libraries(blend ${OpenCV_LIBRARIES})
 	
 # Samples
 
-add_executable(seamless_copy examples/seamless_copy.cpp)
-target_link_libraries(seamless_copy blend ${OpenCV_LIBRARIES})
+add_executable(seamless_cloning examples/seamless_cloning.cpp)
+target_link_libraries(seamless_cloning blend ${OpenCV_LIBRARIES})
