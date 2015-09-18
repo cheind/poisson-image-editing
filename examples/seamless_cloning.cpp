@@ -27,12 +27,13 @@
 #include <Eigen/Dense>
 #pragma warning (pop)
 
-void solvePoissonEquations(cv::Mat_<uchar> bg, cv::Mat_<uchar> fg, cv::Mat_<uchar> fgm, cv::Mat_<float> vx, cv::Mat_<float> vy, cv::Mat &dst)
+void solvePoissonEquations(cv::Mat_<uchar> bg, cv::Mat_<uchar> fg, cv::Mat_<uchar> fgm, cv::Mat_<float> vx, cv::Mat_<float> vy, cv::Mat dst)
 {
     const int width = bg.size().width;
     const int height = bg.size().height;
     cv::Rect bounds(0, 0, bg.cols, bg.rows);
 
+    // Build a mapping from masked pixel to linear index.
     cv::Mat_<int> pixelToIndex(bg.size());
     int npixel = 0;
     for (int y = 0; y < height; ++y) {
@@ -41,27 +42,22 @@ void solvePoissonEquations(cv::Mat_<uchar> bg, cv::Mat_<uchar> fg, cv::Mat_<ucha
         }
     }
 
+    // Divergence of guidance field
     cv::Mat_<float> vxx, vyy;
     cv::Mat kernelx = (cv::Mat_<float>(1, 3) << -0.5, 0, 0.5);
     cv::Mat kernely = (cv::Mat_<float>(3, 1) << -0.5, 0, 0.5);
     cv::filter2D(vx, vxx, CV_32F, kernelx);
     cv::filter2D(vy, vyy, CV_32F, kernely);
 
-    /*
-    cv::Sobel(vx, vxx, CV_32F, 1, 0);
-    cv::Sobel(vy, vyy, CV_32F, 0, 1);
-    vxx *= 1.f / 8.f;
-    vyy *= 1.f / 8.f;
-    */
-
+    // Sparse matrix A is being build with row, column, value triplets
     std::vector<Eigen::Triplet<float> > triplets;
-
-    triplets.reserve(5 * npixel); // maximum of five elements per pixel
+    triplets.reserve(5 * npixel); // Maximum of five elements per pixel
 
     Eigen::VectorXf b(npixel);
     b.setZero();
 
-    const int neighbors[4][2] = { {0, -1}, {0, 1},{ -1, 0},{ 1, 0 } };
+    const int neighbors[4][2] = { {0, -1}, {0, 1},{ -1, 0},{ 1, 0 }};
+    
 
     for (int y = 0; y < height; ++y) {
         for (int x = 0; x < width; ++x) {
@@ -93,14 +89,12 @@ void solvePoissonEquations(cv::Mat_<uchar> bg, cv::Mat_<uchar> fg, cv::Mat_<ucha
     Eigen::SparseMatrix<float> A(npixel, npixel);
     A.setFromTriplets(triplets.begin(), triplets.end());
     
-    Eigen::SparseLU<Eigen::SparseMatrix<float>> solver;
+    Eigen::SparseLU< Eigen::SparseMatrix<float> > solver;
     solver.analyzePattern(A);
     solver.factorize(A);
 
     Eigen::VectorXf result(npixel);
     result = solver.solve(b);
-
-    std::cout << result(pixelToIndex(height / 2,  width /2)) << std::endl;
 
     for (int y = 0; y < height; ++y) {
         for (int x = 0; x < width; ++x) {
@@ -123,48 +117,53 @@ void seamlessImageCloning(cv::InputArray background_, cv::InputArray foreground_
     
     cv::Rect overlapAreaBg = cv::Rect(0, 0, bg.cols, bg.rows) & cv::Rect(offsetX, offsetY, fg.cols, fg.rows);
     cv::Rect overlapAreaFg = cv::Rect(0, 0, std::min<int>(overlapAreaBg.width, fg.cols), std::min<int>(overlapAreaBg.height, fg.rows));
-
+    
+    std::vector<cv::Mat> bgChannels, fgChannels, dstChannels;
+    
+    cv::split(fg, fgChannels);
+    cv::split(bg, bgChannels);
+    cv::split(dst, dstChannels);
+    
     cv::Mat_<float> vxf, vyf, vxb, vyb;
-
     cv::Mat kernelx = (cv::Mat_<float>(1, 3) << -0.5, 0, 0.5);
     cv::Mat kernely = (cv::Mat_<float>(3, 1) << -0.5, 0, 0.5);
-    cv::filter2D(fg, vxf, CV_32F, kernelx);
-    cv::filter2D(fg, vyf, CV_32F, kernely);
-    cv::filter2D(bg, vxb, CV_32F, kernelx);
-    cv::filter2D(bg, vyb, CV_32F, kernely);
+    
+    
+    for (int c = 0; c < bg.channels(); ++c) {
+        cv::filter2D(fgChannels[c], vxf, CV_32F, kernelx);
+        cv::filter2D(fgChannels[c], vyf, CV_32F, kernely);
+        cv::filter2D(bgChannels[c], vxb, CV_32F, kernelx);
+        cv::filter2D(bgChannels[c], vyb, CV_32F, kernely);
 
-    cv::Mat_<float> vx(overlapAreaFg.size()), vy(overlapAreaFg.size());
-    cv::addWeighted(vxf(overlapAreaFg), 0.5f, vxb(overlapAreaBg), 0.5f, 0, vx);
-    cv::addWeighted(vyf(overlapAreaFg), 0.5f, vyb(overlapAreaBg), 0.5f, 0, vy);
+        cv::Mat_<float> vx(overlapAreaFg.size()), vy(overlapAreaFg.size());
+        cv::addWeighted(vxf(overlapAreaFg), 0.5f, vxb(overlapAreaBg), 0.5f, 0, vx);
+        cv::addWeighted(vyf(overlapAreaFg), 0.5f, vyb(overlapAreaBg), 0.5f, 0, vy);
 
-    /*
-    cv::Sobel(fg, vx, CV_32F, 1, 0);
-    cv::Sobel(fg, vy, CV_32F, 0, 1);
-
-    vx *= 1.f / 8.f;
-    vy *= 1.f / 8.f;
-    */
-
-
-    solvePoissonEquations(bg(overlapAreaBg), fg(overlapAreaFg), fgm(overlapAreaFg), vx(overlapAreaFg), vy(overlapAreaFg), dst(overlapAreaBg));
+        solvePoissonEquations(bgChannels[c](overlapAreaBg), fgChannels[c](overlapAreaFg),
+                              fgm(overlapAreaFg), vx, vy,
+                              dstChannels[c](overlapAreaBg));
+    }
+    
+    cv::merge(dstChannels, dst);
 }
 
 /** Main entry point */
 int main(int argc, char **argv)
 {
-	if (argc != 5) {
-		std::cerr << argv[0] << " background foreground offsetx offsety" << std::endl;
+	if (argc != 6) {
+		std::cerr << argv[0] << " background foreground mask offsetx offsety" << std::endl;
 		return -1;
 	}
 
-    cv::Mat background = cv::imread(argv[1], CV_LOAD_IMAGE_GRAYSCALE);
-    cv::Mat foreground = cv::imread(argv[2], CV_LOAD_IMAGE_GRAYSCALE);
-    int offsetx = atoi(argv[3]);
-    int offsety = atoi(argv[4]);
+    cv::Mat background = cv::imread(argv[1]);
+    cv::Mat foreground = cv::imread(argv[2]);
+    cv::Mat mask = cv::imread(argv[3], CV_LOAD_IMAGE_GRAYSCALE);
+    int offsetx = atoi(argv[4]);
+    int offsety = atoi(argv[5]);
 
-    cv::Mat mask(foreground.size(), CV_8UC1);
-    mask.setTo(0);
-    mask(cv::Rect(1, 1, mask.cols - 2, mask.rows - 2)).setTo(255);
+    cv::threshold(mask, mask, 127, 255, cv::THRESH_BINARY);
+    cv::rectangle(mask,cv::Rect(0, 0, mask.cols - 1, mask.rows - 1), 0, 1);
+    cv::imshow("mask", mask);
 
     cv::Mat result;
     seamlessImageCloning(background, foreground, mask, offsetx, offsety, result);
