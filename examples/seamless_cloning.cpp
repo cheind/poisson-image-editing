@@ -105,7 +105,79 @@ void solvePoissonEquations(cv::Mat_<uchar> bg, cv::Mat_<uchar> fg, cv::Mat_<ucha
     }
 }
 
-void seamlessImageCloning(cv::InputArray background_, cv::InputArray foreground_, cv::InputArray foregroundMask_, int offsetX, int offsetY, cv::OutputArray destination_)
+struct ForegroundGradientField {
+    
+    void computeGuidanceVectorField(cv::Mat background, cv::Mat foreground, cv::Mat &vx, cv::Mat &vy)
+    {
+        cv::Mat kernelx = (cv::Mat_<float>(1, 3) << -0.5, 0, 0.5);
+        cv::Mat kernely = (cv::Mat_<float>(3, 1) << -0.5, 0, 0.5);
+        
+        cv::filter2D(foreground, vx, CV_32F, kernelx, cv::Point(-1,-1), 0, cv::BORDER_REPLICATE);
+        cv::filter2D(foreground, vy, CV_32F, kernely, cv::Point(-1,-1), 0, cv::BORDER_REPLICATE);
+    }
+};
+
+struct WeightedAveragedGradientField {
+    
+    WeightedAveragedGradientField(float wForeground)
+    : weightForeground(wForeground)
+    {}
+    
+    void computeGuidanceVectorField(cv::Mat background, cv::Mat foreground, cv::Mat &vx, cv::Mat &vy)
+    {
+        cv::Mat_<float> vxf, vyf, vxb, vyb;
+        cv::Mat kernelx = (cv::Mat_<float>(1, 3) << -0.5, 0, 0.5);
+        cv::Mat kernely = (cv::Mat_<float>(3, 1) << -0.5, 0, 0.5);
+        
+        cv::filter2D(foreground, vxf, CV_32F, kernelx, cv::Point(-1,-1), 0, cv::BORDER_REPLICATE);
+        cv::filter2D(foreground, vyf, CV_32F, kernely, cv::Point(-1,-1), 0, cv::BORDER_REPLICATE);
+        cv::filter2D(background, vxb, CV_32F, kernelx, cv::Point(-1,-1), 0, cv::BORDER_REPLICATE);
+        cv::filter2D(background, vyb, CV_32F, kernely, cv::Point(-1,-1), 0, cv::BORDER_REPLICATE);
+        
+        cv::addWeighted(vxf, weightForeground, vxb, 1.f - weightForeground, 0, vx);
+        cv::addWeighted(vyf, weightForeground, vyb, 1.f - weightForeground, 0, vy);
+    }
+    
+    float weightForeground;
+};
+
+struct MixedGradientField {
+    
+    void computeGuidanceVectorField(cv::Mat background, cv::Mat foreground, cv::Mat &vx, cv::Mat &vy)
+    {
+        cv::Mat kernelx = (cv::Mat_<float>(1, 3) << -0.5, 0, 0.5);
+        cv::Mat kernely = (cv::Mat_<float>(3, 1) << -0.5, 0, 0.5);
+        
+        cv::Mat_<float> vxf, vyf, vxb, vyb;
+        cv::filter2D(foreground, vxf, CV_32F, kernelx, cv::Point(-1,-1), 0, cv::BORDER_REPLICATE);
+        cv::filter2D(foreground, vyf, CV_32F, kernely, cv::Point(-1,-1), 0, cv::BORDER_REPLICATE);
+        cv::filter2D(background, vxb, CV_32F, kernelx, cv::Point(-1,-1), 0, cv::BORDER_REPLICATE);
+        cv::filter2D(background, vyb, CV_32F, kernely, cv::Point(-1,-1), 0, cv::BORDER_REPLICATE);
+        
+        vx.create(vxf.size(), vxf.type());
+        vy.create(vyf.size(), vyf.type());
+        
+        for(int id = 0; id < (vx.rows * vx.cols); ++id)
+        {
+            cv::Vec2f g[2] = {cv::Vec2f(vxf.ptr<float>()[id], vyf.ptr<float>()[id]),
+                              cv::Vec2f(vxb.ptr<float>()[id], vyb.ptr<float>()[id])};
+            
+            int which = (g[0].dot(g[0]) > g[1].dot(g[1])) ? 0 : 1;
+            
+            vx.ptr<float>()[id] = g[which][0];
+            vy.ptr<float>()[id] = g[which][1];
+        }
+        
+    }
+};
+
+template<class GuidanceFieldGenerator>
+void seamlessImageCloning(cv::InputArray background_,
+                          cv::InputArray foreground_,
+                          cv::InputArray foregroundMask_,
+                          int offsetX, int offsetY,
+                          GuidanceFieldGenerator gen,
+                          cv::OutputArray destination_)
 {
     cv::Mat bg = background_.getMat();
     cv::Mat fg = foreground_.getMat();
@@ -124,22 +196,16 @@ void seamlessImageCloning(cv::InputArray background_, cv::InputArray foreground_
     cv::split(bg, bgChannels);
     cv::split(dst, dstChannels);
     
-    cv::Mat_<float> vxf, vyf, vxb, vyb;
-    cv::Mat kernelx = (cv::Mat_<float>(1, 3) << -0.5, 0, 0.5);
-    cv::Mat kernely = (cv::Mat_<float>(3, 1) << -0.5, 0, 0.5);
-    
+    cv::Mat_<float> vx(overlapAreaFg.size()), vy(overlapAreaFg.size());
     
     for (int c = 0; c < bg.channels(); ++c) {
-        cv::filter2D(fgChannels[c], vxf, CV_32F, kernelx);
-        cv::filter2D(fgChannels[c], vyf, CV_32F, kernely);
-        cv::filter2D(bgChannels[c], vxb, CV_32F, kernelx);
-        cv::filter2D(bgChannels[c], vyb, CV_32F, kernely);
+        
+        gen.computeGuidanceVectorField(bgChannels[c](overlapAreaBg),
+                                       fgChannels[c](overlapAreaFg),
+                                       vx, vy);
 
-        cv::Mat_<float> vx(overlapAreaFg.size()), vy(overlapAreaFg.size());
-        cv::addWeighted(vxf(overlapAreaFg), 0.5f, vxb(overlapAreaBg), 0.5f, 0, vx);
-        cv::addWeighted(vyf(overlapAreaFg), 0.5f, vyb(overlapAreaBg), 0.5f, 0, vy);
-
-        solvePoissonEquations(bgChannels[c](overlapAreaBg), fgChannels[c](overlapAreaFg),
+        solvePoissonEquations(bgChannels[c](overlapAreaBg),
+                              fgChannels[c](overlapAreaFg),
                               fgm(overlapAreaFg), vx, vy,
                               dstChannels[c](overlapAreaBg));
     }
@@ -163,15 +229,19 @@ int main(int argc, char **argv)
 
     cv::threshold(mask, mask, 127, 255, cv::THRESH_BINARY);
     cv::rectangle(mask,cv::Rect(0, 0, mask.cols - 1, mask.rows - 1), 0, 1);
-    cv::imshow("mask", mask);
-
+    
     cv::Mat result;
-    seamlessImageCloning(background, foreground, mask, offsetx, offsety, result);
-
-
+    
+    seamlessImageCloning(background, foreground, mask, offsetx, offsety, ForegroundGradientField(), result);
+    cv::imshow("ForegroundGradientField", result);
+    
+    seamlessImageCloning(background, foreground, mask, offsetx, offsety, WeightedAveragedGradientField(0.5f), result);
+    cv::imshow("WeightedAveragedGradientField", result);
+    
+    seamlessImageCloning(background, foreground, mask, offsetx, offsety, MixedGradientField(), result);
+    cv::imshow("MixedGradientField", result);
+    
     cv::imshow("background", background);
-    cv::imshow("foreground", foreground);
-    cv::imshow("output", result);
 	cv::waitKey();
 
 	return 0;
