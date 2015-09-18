@@ -213,6 +213,27 @@ void seamlessImageCloning(cv::InputArray background_,
     cv::merge(dstChannels, dst);
 }
 
+void naiveImageCloning(cv::InputArray background_,
+                       cv::InputArray foreground_,
+                       cv::InputArray foregroundMask_,
+                       int offsetX, int offsetY,
+                       cv::OutputArray destination_)
+{
+    cv::Mat bg = background_.getMat();
+    cv::Mat fg = foreground_.getMat();
+    cv::Mat fgm = foregroundMask_.getMat();
+    
+    destination_.create(bg.size(), bg.type());
+    cv::Mat dst = destination_.getMat();
+    bg.copyTo(dst);
+    
+    cv::Rect overlapAreaBg = cv::Rect(0, 0, bg.cols, bg.rows) & cv::Rect(offsetX, offsetY, fg.cols, fg.rows);
+    cv::Rect overlapAreaFg = cv::Rect(0, 0, std::min<int>(overlapAreaBg.width, fg.cols), std::min<int>(overlapAreaBg.height, fg.rows));
+    
+    fg(overlapAreaFg).copyTo(dst(overlapAreaBg), fgm(overlapAreaFg));
+
+}
+
 /** Main entry point */
 int main(int argc, char **argv)
 {
@@ -232,16 +253,22 @@ int main(int argc, char **argv)
     
     cv::Mat result;
     
+    naiveImageCloning(background, foreground, mask, offsetx, offsety, result);
+    cv::imshow("Naive", result);
+    cv::imwrite("naive.png", result);
+    
     seamlessImageCloning(background, foreground, mask, offsetx, offsety, ForegroundGradientField(), result);
     cv::imshow("ForegroundGradientField", result);
+    cv::imwrite("fg-gradient.png", result);
     
     seamlessImageCloning(background, foreground, mask, offsetx, offsety, WeightedAveragedGradientField(0.5f), result);
     cv::imshow("WeightedAveragedGradientField", result);
+    cv::imwrite("avg-gradient.png", result);
     
     seamlessImageCloning(background, foreground, mask, offsetx, offsety, MixedGradientField(), result);
     cv::imshow("MixedGradientField", result);
+    cv::imwrite("mixed-gradient.png", result);
     
-    cv::imshow("background", background);
 	cv::waitKey();
 
 	return 0;
