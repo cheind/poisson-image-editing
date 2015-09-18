@@ -172,6 +172,7 @@ namespace blend {
         }
 
         cv::merge(dstChannels, dst);
+        // also: http://www.cs.tau.ac.il/~dcor/articles/2009/Coordinates-for-Instant.pdf
 
     }
 }
