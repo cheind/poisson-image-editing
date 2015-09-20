@@ -14,7 +14,7 @@ The function `blend::seamlessClone` implements the method described in [1] provi
 | ![Naive Image Cloning](/etc/results/2/naive.png?raw=true) | ![Seamless Image Cloning](/etc/results/2/mixed-gradients.png?raw=true) |
 
 # References
-[1]: Pérez, Patrick, Michel Gangnet, and Andrew Blake. "Poisson image editing." ACM Transactions on Graphics (TOG). Vol. 22. No. 3. ACM, 2003.
+[1] Pérez, Patrick, Michel Gangnet, and Andrew Blake. "Poisson image editing." ACM Transactions on Graphics (TOG). Vol. 22. No. 3. ACM, 2003.
 
 # Building from source
 To build **PoissonBlend** from source you need the following prerequisites
