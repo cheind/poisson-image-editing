@@ -17,12 +17,12 @@ The function `blend::seamlessClone` implements the method described in [1] provi
 [1]: Pérez, Patrick, Michel Gangnet, and Andrew Blake. "Poisson image editing." ACM Transactions on Graphics (TOG). Vol. 22. No. 3. ACM, 2003.
 
 # Building from source
-To build **Inpaint** from source you need the following prerequisites
+To build **PoissonBlend** from source you need the following prerequisites
  - [CMake](www.cmake.org) - for generating cross platform build files
  - [OpenCV](www.opencv.org) - for image processing related functions
  - [Eigen](eigen.tuxfamily.org/) - for sparse linear system solving
  
-Although **Poisson Image Blending** should build across multiple platforms and architectures, tests are carried out on these systems
+Although **PoissonBlend** should build across multiple platforms and architectures, tests are carried out on these systems
  - Windows 7/8 MSVC10 x86
  - OS X 10.10 XCode 6.2
 
