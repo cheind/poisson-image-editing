@@ -1,6 +1,6 @@
 # About this library
 
-**PoissonBlend** is a small C++ library providing implementations of image editing methods based on gradient domains. 
+**Poisson Image Editing** is a small C++ library providing implementations of image editing methods based on gradient domains. 
 
 # Seamless Cloning
 
@@ -17,12 +17,12 @@ The function `blend::seamlessClone` implements the method described in [1] provi
 [1] Pérez, Patrick, Michel Gangnet, and Andrew Blake. "Poisson image editing." ACM Transactions on Graphics (TOG). Vol. 22. No. 3. ACM, 2003.
 
 # Building from source
-To build **PoissonBlend** from source you need the following prerequisites
+To build **Poisson Image Editing** from source you need the following prerequisites
  - [CMake](www.cmake.org) - for generating cross platform build files
  - [OpenCV](www.opencv.org) - for image processing related functions
  - [Eigen](eigen.tuxfamily.org/) - for sparse linear system solving
  
-Although **PoissonBlend** should build across multiple platforms and architectures, tests are carried out on these systems
+Although **Poisson Image Editing** should build across multiple platforms and architectures, tests are carried out on these systems
  - Windows 7/8 MSVC10 x86
  - OS X 10.10 XCode 6.2
 
@@ -32,16 +32,16 @@ If the build should fail for a specific platform, don't hesitate to create an is
 ```
    Copyright Christoph Heindl 2015
 
-   PoissonBlend is free software: you can redistribute it and/or modify
+   Poisson Image Editing is free software: you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
    the Free Software Foundation, either version 3 of the License, or
    (at your option) any later version.
    
-   PoissonBlend is distributed in the hope that it will be useful,
+   Poisson Image Editing is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
    
    You should have received a copy of the GNU General Public License
-   along with PoissonBlend.  If not, see <http://www.gnu.org/licenses/>.
+   along with Poisson Image Editing.  If not, see <http://www.gnu.org/licenses/>.
 ```
