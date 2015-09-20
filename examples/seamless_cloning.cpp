@@ -1,21 +1,21 @@
 /**
-    This file is part of PoissonBlend.
-
-    Copyright Christoph Heindl 2015
-
-    PoissonBlend is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
-
-    PoissonBlend is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
-
-    You should have received a copy of the GNU General Public License
-    along with PoissonBlend.  If not, see <http://www.gnu.org/licenses/>.
-*/
+ This file is part of PoissonBlend.
+ 
+ Copyright Christoph Heindl 2015
+ 
+ PoissonBlend is free software: you can redistribute it and/or modify
+ it under the terms of the GNU General Public License as published by
+ the Free Software Foundation, either version 3 of the License, or
+ (at your option) any later version.
+ 
+ PoissonBlend is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ GNU General Public License for more details.
+ 
+ You should have received a copy of the GNU General Public License
+ along with PoissonBlend.  If not, see <http://www.gnu.org/licenses/>.
+ */
 
 #include <blend/poisson_blend.h>
 #include <opencv2/opencv.hpp>
@@ -43,7 +43,7 @@ void naiveClone(cv::InputArray background_,
     
     bg.copyTo(dst);
     fg(overlapAreaFg).copyTo(dst(overlapAreaBg), fgm(overlapAreaFg));
-
+    
 }
 
 /**
@@ -53,17 +53,17 @@ void naiveClone(cv::InputArray background_,
  */
 int main(int argc, char **argv)
 {
-	if (argc != 6) {
-		std::cerr << argv[0] << " background foreground mask offsetx offsety" << std::endl;
-		return -1;
-	}
-
+    if (argc != 6) {
+        std::cerr << argv[0] << " background foreground mask offsetx offsety" << std::endl;
+        return -1;
+    }
+    
     cv::Mat background = cv::imread(argv[1]);
     cv::Mat foreground = cv::imread(argv[2]);
     cv::Mat mask = cv::imread(argv[3], CV_LOAD_IMAGE_GRAYSCALE);
     int offsetx = atoi(argv[4]);
     int offsety = atoi(argv[5]);
-
+    
     
     cv::Mat result;
     
@@ -83,9 +83,9 @@ int main(int argc, char **argv)
     cv::imshow("Averaged Gradients", result);
     cv::imwrite("averaged-gradients.png", result);
     
-	cv::waitKey();
-
-	return 0;
+    cv::waitKey();
+    
+    return 0;
 }
 
 
