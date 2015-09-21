@@ -18,7 +18,7 @@
  */
 
 
-#include <blend/poisson_blend.h>
+#include <blend/clone.h>
 #include <blend/poisson_solver.h>
 #include <opencv2/opencv.hpp>
 #pragma warning (push)

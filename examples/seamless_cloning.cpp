@@ -17,7 +17,7 @@
  along with Poisson Image Editing.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <blend/poisson_blend.h>
+#include <blend/clone.h>
 #include <opencv2/opencv.hpp>
 
 /**
