@@ -1,5 +1,5 @@
 /**
- This file is part of PoissonBlend.
+ This file is part of Poisson Image Editing.
  
  Copyright Christoph Heindl 2015
  
