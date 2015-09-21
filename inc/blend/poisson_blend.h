@@ -47,7 +47,6 @@ namespace blend {
          */
         void computeMixedGradientVectorField(cv::InputArray background,
                                              cv::InputArray foreground,
-                                             cv::InputArray foregroundMask,
                                              cv::OutputArray vx,
                                              cv::OutputArray vy);
         
@@ -58,7 +57,6 @@ namespace blend {
          */
         void computeWeightedGradientVectorField(cv::InputArray background,
                                                 cv::InputArray foreground,
-                                                cv::InputArray foregroundMask,
                                                 cv::OutputArray vx,
                                                 cv::OutputArray vy,
                                                 float weightForeground);
@@ -113,14 +111,6 @@ namespace blend {
                        int offsetY,
                        cv::OutputArray destination,
                        CloneType type);
-
-    void seamlessClone2(cv::InputArray background,
-        cv::InputArray foreground,
-        cv::InputArray foregroundMask,
-        int offsetX,
-        int offsetY,
-        cv::OutputArray destination,
-        CloneType type);
 
 }
 #endif

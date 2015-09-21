@@ -48,7 +48,6 @@ namespace blend {
         
         void computeMixedGradientVectorField(cv::InputArray background,
                                              cv::InputArray foreground,
-                                             cv::InputArray foregroundMask,
                                              cv::OutputArray vx_,
                                              cv::OutputArray vy_)
         {
@@ -89,7 +88,6 @@ namespace blend {
         
         void computeWeightedGradientVectorField(cv::InputArray background,
                                                 cv::InputArray foreground,
-                                                cv::InputArray foregroundMask,
                                                 cv::OutputArray vx,
                                                 cv::OutputArray vy,
                                                 float weightForeground)
@@ -110,130 +108,6 @@ namespace blend {
             cv::addWeighted(vxf, weightForeground, vxb, 1.f - weightForeground, 0, vx);
             cv::addWeighted(vyf, weightForeground, vyb, 1.f - weightForeground, 0, vy);
         }
-        
-        void solvePoissonEquationsSingleChannel(cv::Mat_<uchar> bg,
-                                                cv::Mat_<uchar> fg,
-                                                cv::Mat_<uchar> fgm,
-                                                cv::Mat_<float> vx,
-                                                cv::Mat_<float> vy,
-                                                cv::Mat dst)
-        {
-            const int width = bg.size().width;
-            const int height = bg.size().height;
-            cv::Rect bounds(0, 0, bg.cols, bg.rows);
-            
-            // Build a mapping from masked pixel to linear index.
-            cv::Mat_<int> pixelToIndex(bg.size());
-            int npixel = 0;
-            for (int y = 0; y < height; ++y) {
-                for (int x = 0; x < width; ++x) {
-                    pixelToIndex(y, x) = fgm(y, x) ? npixel++ : -1;
-                }
-            }
-            
-            // Divergence of guidance field
-            cv::Mat_<float> vxx, vyy;
-            cv::Mat kernelx = (cv::Mat_<float>(1, 3) << -0.5, 0, 0.5);
-            cv::Mat kernely = (cv::Mat_<float>(3, 1) << -0.5, 0, 0.5);
-            cv::filter2D(vx, vxx, CV_32F, kernelx);
-            cv::filter2D(vy, vyy, CV_32F, kernely);
-            
-            // Sparse matrix A is being build with row, column, value triplets
-            std::vector<Eigen::Triplet<float> > triplets;
-            triplets.reserve(5 * npixel); // Maximum of five elements per pixel
-            
-            Eigen::VectorXf b(npixel);
-            b.setZero();
-            
-            const int neighbors[4][2] = { {0, -1}, {0, 1}, {-1, 0}, {1, 0 } };
-            
-            
-            for (int y = 0; y < height; ++y) {
-                for (int x = 0; x < width; ++x) {
-                    
-                    const cv::Point p = cv::Point(x, y);
-                    const int pid = pixelToIndex(p);
-                    
-                    if (fgm(p)) {
-                        int nneighbors = 0;
-                        for (int n = 0; n < 4; ++n) {
-                            cv::Point q = cv::Point(x + neighbors[n][0], y + neighbors[n][1]);
-                            if (bounds.contains(q)) {
-                                ++nneighbors;
-                                if (fgm(q)) {
-                                    const int qid = pixelToIndex(q);
-                                    triplets.push_back(Eigen::Triplet<float>(pid, qid, 1.f));
-                                }
-                                else {
-                                    b(pid) -= bg(q);
-                                }
-                            }
-                        }
-                        b(pid) += vxx(p) + vyy(p);
-                        triplets.push_back(Eigen::Triplet<float>(pid, pid, -(float)nneighbors));
-                    }
-                }
-            }
-            
-            Eigen::SparseMatrix<float> A(npixel, npixel);
-            A.setFromTriplets(triplets.begin(), triplets.end());
-            
-            Eigen::SparseLU< Eigen::SparseMatrix<float> > solver;
-            solver.analyzePattern(A);
-            solver.factorize(A);
-            
-            Eigen::VectorXf result(npixel);
-            result = solver.solve(b);
-            
-            for (int y = 0; y < height; ++y) {
-                for (int x = 0; x < width; ++x) {
-                    if (fgm(y, x)) {
-                        dst.at<uchar>(y, x) = cv::saturate_cast<uchar>(result(pixelToIndex(y, x)));
-                    }
-                }
-            }
-        }
-        
-        
-        void solvePoissonEquations(cv::InputArray background,
-                                   cv::InputArray foreground,
-                                   cv::InputArray foregroundMask,
-                                   cv::InputArray vx,
-                                   cv::InputArray vy,
-                                   cv::OutputArray destination)
-        {
-            // Split the input into separate channels, then invoke the solving
-            // for each channel and merge computed channel values into destination.
-            
-            cv::Mat bg = background.getMat();
-            cv::Mat fg = foreground.getMat();
-            cv::Mat fgm = foregroundMask.getMat();
-            
-            destination.create(bg.size(), bg.type());
-            cv::Mat dst = destination.getMat();
-            
-            bg.copyTo(dst);
-            
-            std::vector<cv::Mat> bgChannels, fgChannels, dstChannels, vxChannels, vyChannels;
-            
-            cv::split(fg, fgChannels);
-            cv::split(bg, bgChannels);
-            cv::split(vx, vxChannels);
-            cv::split(vy, vyChannels);
-            cv::split(dst, dstChannels);
-            
-            for (int c = 0; c < bg.channels(); ++c) {
-                
-                solvePoissonEquationsSingleChannel(bgChannels[c],
-                                                   fgChannels[c],
-                                                   fgm,
-                                                   vxChannels[c], vyChannels[c],
-                                                   dstChannels[c]);
-            }
-            
-            cv::merge(dstChannels, dst);
-            
-        }
     }
     
     void seamlessClone(cv::InputArray background,
@@ -245,12 +119,6 @@ namespace blend {
                        CloneType type)
     {
         
-        // We want to ensure that the mask does not have white pixels at image edges. We
-        // need at least a one pixel black border for the Dirichlet boundary conditions.
-        cv::Mat modifiedMask = foregroundMask.getMat().clone();
-        cv::threshold(modifiedMask, modifiedMask, 1, 255, cv::THRESH_BINARY);
-        cv::rectangle(modifiedMask, cv::Rect(0, 0, modifiedMask.cols - 1, modifiedMask.rows - 1), 0, 1);
-        
         // Copy original background as we only solve for the overlapping area of the translated foreground mask.
         background.getMat().copyTo(destination);
         
@@ -258,14 +126,13 @@ namespace blend {
         cv::Rect rbg, rfg;
         if (!detail::findOverlap(background, foreground, offsetX, offsetY, rbg, rfg))
             return;
-
+        
         // Compute the guidance vector field
         cv::Mat vx, vy;
         switch (type) {
             case CLONE_FOREGROUND_GRADIENTS:
                 detail::computeWeightedGradientVectorField(background.getMat()(rbg),
                                                            foreground.getMat()(rfg),
-                                                           modifiedMask(rfg),
                                                            vx, vy,
                                                            1.f);
                 break;
@@ -273,7 +140,6 @@ namespace blend {
             case CLONE_AVERAGED_GRADIENTS:
                 detail::computeWeightedGradientVectorField(background.getMat()(rbg),
                                                            foreground.getMat()(rfg),
-                                                           modifiedMask(rfg),
                                                            vx, vy,
                                                            0.5f);
                 break;
@@ -281,7 +147,6 @@ namespace blend {
             case CLONE_MIXED_GRADIENTS:
                 detail::computeMixedGradientVectorField(background.getMat()(rbg),
                                                         foreground.getMat()(rfg),
-                                                        modifiedMask(rfg),
                                                         vx, vy);
                 break;
                 
@@ -289,100 +154,46 @@ namespace blend {
                 break;
         }
         
-        // Solve equations for each channel separately.
-        detail::solvePoissonEquations(background.getMat()(rbg),
-                                      foreground.getMat()(rfg),
-                                      modifiedMask(rfg),
-                                      vx, vy,
-                                      destination.getMat()(rbg));
-    }
-
-    void seamlessClone2(
-        cv::InputArray background,
-        cv::InputArray foreground,
-        cv::InputArray foregroundMask,
-        int offsetX,
-        int offsetY,
-        cv::OutputArray destination,
-        CloneType type)
-    {
-        // We want to ensure that the mask does not have white pixels at image edges. We
-        // need at least a one pixel black border for the Dirichlet boundary conditions.
-        cv::Mat modifiedMask = foregroundMask.getMat().clone();
-        cv::threshold(modifiedMask, modifiedMask, 1, 255, cv::THRESH_BINARY);
-        cv::rectangle(modifiedMask, cv::Rect(0, 0, modifiedMask.cols - 1, modifiedMask.rows - 1), 0, 1);
-
-        // Copy original background as we only solve for the overlapping area of the translated foreground mask.
-        background.getMat().copyTo(destination);
-
-        // Find overlapping region. We will only perform on this region
-        cv::Rect rbg, rfg;
-        if (!detail::findOverlap(background, foreground, offsetX, offsetY, rbg, rfg))
-            return;
-
-        // Compute the guidance vector field
-        cv::Mat vx, vy;
-        switch (type) {
-        case CLONE_FOREGROUND_GRADIENTS:
-            detail::computeWeightedGradientVectorField(background.getMat()(rbg),
-                foreground.getMat()(rfg),
-                modifiedMask(rfg),
-                vx, vy,
-                1.f);
-            break;
-
-        case CLONE_AVERAGED_GRADIENTS:
-            detail::computeWeightedGradientVectorField(background.getMat()(rbg),
-                foreground.getMat()(rfg),
-                modifiedMask(rfg),
-                vx, vy,
-                0.5f);
-            break;
-
-        case CLONE_MIXED_GRADIENTS:
-            detail::computeMixedGradientVectorField(background.getMat()(rbg),
-                foreground.getMat()(rfg),
-                modifiedMask(rfg),
-                vx, vy);
-            break;
-
-        default:
-            break;
-        }
-
+        
+        // For the Poisson equation the divergence of the guidance field is necessary.
         cv::Mat vxx, vyy;
-
-
         cv::Mat kernelx = (cv::Mat_<float>(1, 3) << -0.5, 0, 0.5);
         cv::Mat kernely = (cv::Mat_<float>(3, 1) << -0.5, 0, 0.5);
         cv::filter2D(vx, vxx, CV_32F, kernelx);
         cv::filter2D(vy, vyy, CV_32F, kernely);
-
+        
         cv::Mat f = vxx + vyy;
-
         
-        cv::Mat dmmask = 255 - modifiedMask;
+        // In our problem statement we will have fixed intensity values at the border of the foreground mask.
+        cv::Mat dirichletMask = foregroundMask.getMat()(rfg).clone();
+        cv::threshold(dirichletMask, dirichletMask, 0, 255, cv::THRESH_BINARY_INV);
         
-        cv::Mat nmask(dmmask.size(), dmmask.type());
-        nmask.setTo(0);
-
-        cv::Mat nvalues(dmmask.size(), f.type());
-        nvalues.setTo(0);
-
-        cv::Mat dvalues;
-        background.getMat()(rbg).convertTo(dvalues, CV_32F);
+        // We ensure that at least the outer border corresponds to Dirichlet boundary conditions.
+        cv::rectangle(dirichletMask, cv::Rect(0, 0, dirichletMask.cols - 1, dirichletMask.rows - 1), 255, 1);
+        
+        // The Dirichlet boundary values correspond to the intensities of the background image.
+        cv::Mat dirichletValues;
+        background.getMat()(rbg).convertTo(dirichletValues, CV_32F);
+        
+        // We don't have any von Neumann boundary conditions.
+        cv::Mat neumannMask(f.size(), CV_8UC1);
+        neumannMask.setTo(0);
+        
+        cv::Mat neumannValues(f.size(), dirichletValues.type());
+        neumannValues.setTo(0);
+        
+        // Solve Poisson equation
         cv::Mat result;
-
-        solvePoissonEquations(
-            f,
-            dmmask,
-            dvalues,
-            nmask,
-            nvalues,
-            result);
-
+        solvePoissonEquations(f,
+                              dirichletMask,
+                              dirichletValues,
+                              neumannMask,
+                              neumannValues,
+                              result);
+        
+        // Copy result to destination image.
         result.convertTo(destination.getMat()(rbg), CV_8U);
-
+        
     }
     
     

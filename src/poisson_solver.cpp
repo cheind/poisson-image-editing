@@ -106,6 +106,9 @@ namespace blend {
         if (nUnknowns == 0) {
             // No unknowns left, we're done
             return;
+        } else if (nUnknowns == f.size().area()) {
+            // All unknowns, will not lead to a unique solution
+            // TODO emit warning
         }
 
         const cv::Rect bounds(0, 0, f.cols, f.rows);
