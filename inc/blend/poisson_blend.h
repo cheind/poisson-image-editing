@@ -114,5 +114,13 @@ namespace blend {
                        cv::OutputArray destination,
                        CloneType type);
 
+    void seamlessClone2(cv::InputArray background,
+        cv::InputArray foreground,
+        cv::InputArray foregroundMask,
+        int offsetX,
+        int offsetY,
+        cv::OutputArray destination,
+        CloneType type);
+
 }
 #endif

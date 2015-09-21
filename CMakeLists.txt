@@ -16,8 +16,10 @@ include_directories(${OpenCV_INCLUDE_DIRS} ${EIGEN_INCLUDE_DIR} "inc")
 # Library
 
 add_library(blend 
+	inc/blend/poisson_solver.h
 	inc/blend/poisson_blend.h
-	src/poisson_blend.cpp
+	src/poisson_solver.cpp
+	src/poisson_blend.cpp	
 )
 	
 target_link_libraries(blend ${OpenCV_LIBRARIES})

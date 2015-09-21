@@ -19,6 +19,7 @@
 
 
 #include <blend/poisson_blend.h>
+#include <blend/poisson_solver.h>
 #include <opencv2/opencv.hpp>
 #pragma warning (push)
 #pragma warning (disable: 4244)
@@ -294,6 +295,94 @@ namespace blend {
                                       modifiedMask(rfg),
                                       vx, vy,
                                       destination.getMat()(rbg));
+    }
+
+    void seamlessClone2(
+        cv::InputArray background,
+        cv::InputArray foreground,
+        cv::InputArray foregroundMask,
+        int offsetX,
+        int offsetY,
+        cv::OutputArray destination,
+        CloneType type)
+    {
+        // We want to ensure that the mask does not have white pixels at image edges. We
+        // need at least a one pixel black border for the Dirichlet boundary conditions.
+        cv::Mat modifiedMask = foregroundMask.getMat().clone();
+        cv::threshold(modifiedMask, modifiedMask, 1, 255, cv::THRESH_BINARY);
+        cv::rectangle(modifiedMask, cv::Rect(0, 0, modifiedMask.cols - 1, modifiedMask.rows - 1), 0, 1);
+
+        // Copy original background as we only solve for the overlapping area of the translated foreground mask.
+        background.getMat().copyTo(destination);
+
+        // Find overlapping region. We will only perform on this region
+        cv::Rect rbg, rfg;
+        if (!detail::findOverlap(background, foreground, offsetX, offsetY, rbg, rfg))
+            return;
+
+        // Compute the guidance vector field
+        cv::Mat vx, vy;
+        switch (type) {
+        case CLONE_FOREGROUND_GRADIENTS:
+            detail::computeWeightedGradientVectorField(background.getMat()(rbg),
+                foreground.getMat()(rfg),
+                modifiedMask(rfg),
+                vx, vy,
+                1.f);
+            break;
+
+        case CLONE_AVERAGED_GRADIENTS:
+            detail::computeWeightedGradientVectorField(background.getMat()(rbg),
+                foreground.getMat()(rfg),
+                modifiedMask(rfg),
+                vx, vy,
+                0.5f);
+            break;
+
+        case CLONE_MIXED_GRADIENTS:
+            detail::computeMixedGradientVectorField(background.getMat()(rbg),
+                foreground.getMat()(rfg),
+                modifiedMask(rfg),
+                vx, vy);
+            break;
+
+        default:
+            break;
+        }
+
+        cv::Mat vxx, vyy;
+
+
+        cv::Mat kernelx = (cv::Mat_<float>(1, 3) << -0.5, 0, 0.5);
+        cv::Mat kernely = (cv::Mat_<float>(3, 1) << -0.5, 0, 0.5);
+        cv::filter2D(vx, vxx, CV_32F, kernelx);
+        cv::filter2D(vy, vyy, CV_32F, kernely);
+
+        cv::Mat f = vxx + vyy;
+
+        
+        cv::Mat dmmask = 255 - modifiedMask;
+        
+        cv::Mat nmask(dmmask.size(), dmmask.type());
+        nmask.setTo(0);
+
+        cv::Mat nvalues(dmmask.size(), f.type());
+        nvalues.setTo(0);
+
+        cv::Mat dvalues;
+        background.getMat()(rbg).convertTo(dvalues, CV_32F);
+        cv::Mat result;
+
+        solvePoissonEquations(
+            f,
+            dmmask,
+            dvalues,
+            nmask,
+            nvalues,
+            result);
+
+        result.convertTo(destination.getMat()(rbg), CV_8U);
+
     }
     
     
