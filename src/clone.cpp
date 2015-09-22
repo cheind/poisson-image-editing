@@ -172,32 +172,19 @@ namespace blend {
         cv::filter2D(vy, vyy, CV_32F, kernely);
         
         cv::Mat f = vxx + vyy;
-        
-        // In our problem statement we will have fixed intensity values at the border of the foreground mask.
-        cv::Mat dirichletMask = foregroundMask.getMat()(rfg).clone();
-        cv::threshold(dirichletMask, dirichletMask, 0, 255, cv::THRESH_BINARY_INV);
-        
-        // We ensure that at least the outer border corresponds to Dirichlet boundary conditions.
-        cv::rectangle(dirichletMask, cv::Rect(0, 0, dirichletMask.cols - 1, dirichletMask.rows - 1), 255, 1);
-        
-        // The Dirichlet boundary values correspond to the intensities of the background image.
-        cv::Mat dirichletValues;
-        background.getMat()(rbg).convertTo(dirichletValues, CV_32F);
-        
-        // We don't have any von Neumann boundary conditions.
-        cv::Mat neumannMask(f.size(), CV_8UC1);
-        neumannMask.setTo(0);
-        
-        cv::Mat neumannValues(f.size(), dirichletValues.type());
-        neumannValues.setTo(0);
+                
+        cv::Mat boundaryMask(rfg.size(), CV_8UC1);      
+        cv::threshold(foregroundMask.getMat()(rfg), boundaryMask, constants::UNKNOWN, constants::DIRICHLET_BD, cv::THRESH_BINARY_INV);
+        cv::rectangle(boundaryMask, cv::Rect(0, 0, boundaryMask.cols, boundaryMask.rows), constants::DIRICHLET_BD, 1);
+
+        cv::Mat boundaryValues(rfg.size(), CV_MAKETYPE(CV_32F, background.channels()));
+        background.getMat()(rbg).convertTo(boundaryValues, CV_32F);
         
         // Solve Poisson equation
         cv::Mat result;
         solvePoissonEquations(f,
-                              dirichletMask,
-                              dirichletValues,
-                              neumannMask,
-                              neumannValues,
+                              boundaryMask,
+                              boundaryValues,
                               result);
         
         // Copy result to destination image.

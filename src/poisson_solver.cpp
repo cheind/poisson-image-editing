@@ -42,7 +42,7 @@ namespace blend {
     }
 
     /* Build a one dimensional index lookup for element in mask. */
-    cv::Mat buildPixelToIndexLookup(cv::InputArray mask, uchar compareValue, int &npixel)
+    cv::Mat buildPixelToIndexLookup(cv::InputArray mask, int &npixel)
     {
         cv::Mat_<uchar> m = makeContinuous(mask.getMat());
 
@@ -53,7 +53,7 @@ namespace blend {
         const uchar *maskPtr = m.ptr<uchar>();
 
         for (int id = 0; id < (m.rows * m.cols); ++id) {
-            pixelToIndexPtr[id] = (maskPtr[id] == compareValue) ? npixel++ : -1;
+            pixelToIndexPtr[id] = (maskPtr[id] == constants::DIRICHLET_BD) ? -1 : npixel++;
         }
 
         return pixelToIndex;
@@ -61,48 +61,39 @@ namespace blend {
     
     void solvePoissonEquations(
         cv::InputArray f_,
-        cv::InputArray dirichletMask_,
-        cv::InputArray dirichletValues_,
-        cv::InputArray neumannMask_,
-        cv::InputArray neumannValues_,
+        cv::InputArray bdMask_,
+        cv::InputArray bdValues_,
         cv::OutputArray result_)
     {
         // Input validation
 
         CV_Assert(
             !f_.empty() &&
-            isSameSize(f_.size(), dirichletMask_.size()) &&
-            isSameSize(f_.size(), dirichletValues_.size()) &&
-            isSameSize(f_.size(), neumannMask_.size()) &&
-            isSameSize(f_.size(), neumannValues_.size()));
+            isSameSize(f_.size(), bdMask_.size()) &&
+            isSameSize(f_.size(), bdValues_.size())
+        );
 
         CV_Assert(
             f_.depth() == CV_32F &&
-            dirichletMask_.depth() == CV_8U &&
-            neumannMask_.depth() == CV_8U &&
-            dirichletValues_.depth() == CV_32F &&
-            neumannValues_.depth() == CV_32F &&
-            f_.channels() == dirichletValues_.channels() &&
-            f_.channels() == neumannValues_.channels() &&
-            dirichletMask_.channels() == 1 &&
-            neumannMask_.channels() == 1);
+            bdMask_.depth() == CV_8U &&
+            bdValues_.depth() == CV_32F &&
+            f_.channels() == bdValues_.channels() &&
+            bdMask_.channels() == 1);
 
         // We assume continuous memory on input
         cv::Mat f = makeContinuous(f_.getMat());
-        cv::Mat_<uchar> dm = makeContinuous(dirichletMask_.getMat());
-        cv::Mat_<uchar> nm = makeContinuous(neumannMask_.getMat());
-        cv::Mat dv = makeContinuous(dirichletValues_.getMat());
-        cv::Mat nv = makeContinuous(neumannValues_.getMat());
+        cv::Mat_<uchar> bm = makeContinuous(bdMask_.getMat());
+        cv::Mat bv = makeContinuous(bdValues_.getMat());
 
         // Allocate output
         result_.create(f.size(), f.type());
         cv::Mat r = result_.getMat();
-        dv.copyTo(r);
+        bv.copyTo(r, bm == constants::DIRICHLET_BD);
 
         // The number of unknowns correspond to the number of pixels on the rectangular region 
         // that don't have a Dirichlet boundary condition.
         int nUnknowns = 0;
-        cv::Mat_<int> unknownIdx = buildPixelToIndexLookup(dm, 0, nUnknowns);
+        cv::Mat_<int> unknownIdx = buildPixelToIndexLookup(bm, nUnknowns);
 
         if (nUnknowns == 0) {
             // No unknowns left, we're done
@@ -154,7 +145,7 @@ namespace blend {
                 float lhs[] = { -4.f, 1.f, 1.f, 1.f, 1.f };
                 int qids[5] = { pid, -1, -1, -1, -1 };
 
-                state.set(2, (nm(p) > 0));
+                state.set(2, (bm(p) == constants::NEUMANN_BD));
                 
                 for (int n = 1; n < 5; ++n) {
                     const cv::Point q(x + offsets[n][0], y + offsets[n][1]);
@@ -187,7 +178,7 @@ namespace blend {
                         if (lhs[n] == 0) {
                             // Neighbor has Dirichlet boundary condition applied. 
                             // Can be considered a known value, so it is moved to right hand side.
-                            rhs.row(pid) -= Eigen::Map<Eigen::VectorXf>(dv.ptr<float>(q.y, q.x), channels);
+                            rhs.row(pid) -= Eigen::Map<Eigen::VectorXf>(bv.ptr<float>(q.y, q.x), channels);
                         }
 
                         break;
@@ -196,7 +187,7 @@ namespace blend {
                         // Apply Neumann boundary condition on rectangular domain boundaries.                        
                         lhs[n] -= 1.f;
                         lhs[opposite[n]] += 1.f;
-                        rhs.row(pid) -= Eigen::Map<Eigen::VectorXf>(nv.ptr<float>(p.y, p.x), channels);
+                        rhs.row(pid) += 2.f * Eigen::Map<Eigen::VectorXf>(bv.ptr<float>(p.y, p.x), channels);
 
                         break;
                     }
