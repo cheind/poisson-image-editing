@@ -83,25 +83,13 @@ TEST_CASE("Laplacian-2d")
 
     cv::Mat bmask(height, width, CV_8UC1);
     bmask.setTo(blend::constants::UNKNOWN);
-    /*
     bmask.at<uchar>(0, 0) = blend::constants::DIRICHLET_BD;
-    bmask.at<uchar>(0, width - 1) = blend::constants::DIRICHLET_BD;
     bmask.at<uchar>(height - 1, width - 1) = blend::constants::DIRICHLET_BD;
-    bmask.at<uchar>(height - 1, 0) = blend::constants::DIRICHLET_BD;
-    */
-    cv::rectangle(bmask, cv::Rect(0, 0, bmask.cols, bmask.rows), blend::constants::DIRICHLET_BD, 1);
-    bmask.at<uchar>(height/2, width/2) = blend::constants::DIRICHLET_BD;
-
+        
     cv::Mat bvalues(height, width, CV_32FC1);
     bvalues.setTo(0);
-    /*
     bvalues.at<float>(0, 0) = 255;
-    bvalues.at<float>(0, width - 1) = 255;
-    bvalues.at<float>(height - 1, width - 1) = 255;
-    bvalues.at<float>(height - 1, 0) = 255;
-    */
-    cv::rectangle(bvalues, cv::Rect(0, 0, bmask.cols, bmask.rows), 0, 1);
-    bvalues.at<float>(height / 2, width / 2) = 255;
+    bvalues.at<float>(height - 1, width - 1) = 0;
     
     cv::Mat result;
     blend::solvePoissonEquations(f, bmask, bvalues, result);
@@ -110,11 +98,12 @@ TEST_CASE("Laplacian-2d")
     /*float offset = 255.f / (width - 1);
     for (int i = 0; i < width; ++i) {
         REQUIRE(result.at<float>(0, i) == Approx(i*offset).epsilon(0.01));
-    }*/
+    }
 
     cv::Mat lap, abs_lap;
     cv::Laplacian(result, lap, CV_32F, 3, 1, 0, cv::BORDER_DEFAULT);
     cv::convertScaleAbs(lap, abs_lap);
+    */
 
     
 
