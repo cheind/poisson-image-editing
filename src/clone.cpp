@@ -38,9 +38,18 @@ namespace blend {
         {
             cv::Mat bg = background.getMat();
             cv::Mat fg = foreground.getMat();
+
             
-            rBackground = cv::Rect(0, 0, bg.cols, bg.rows) & cv::Rect(offsetX, offsetY, fg.cols, fg.rows);
-            rForeground = cv::Rect(0, 0, std::min<int>(rBackground.width, fg.cols), std::min<int>(rBackground.height, fg.rows));
+            rBackground = cv::Rect(0, 0, bg.cols, bg.rows) & 
+                          cv::Rect(offsetX, offsetY, fg.cols, fg.rows);
+
+
+            // Compensate for negative offsets. If offset < 0, offset in foreground is positive.
+            rForeground = cv::Rect(std::max<int>(-offsetX, 0), 
+                                   std::max<int>(-offsetY, 0), 
+                                   rBackground.width, 
+                                   rBackground.height);
+
             
             return rForeground.area() > 0;
             
