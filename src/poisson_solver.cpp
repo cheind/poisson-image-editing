@@ -145,13 +145,32 @@ namespace blend {
                 const bool hasNeumann = (bm(p) == constants::NEUMANN_BD);
                 
                 if (hasNeumann) {
+                    
+                    // Implementation note:
+                    //
+                    // We first sweep over all neighbors and apply Neumann boundary (NB) conditions if necessary.
+                    // NBs are currently only applied if the neighbor is not in the domain or it has Dirichlet
+                    // boundary condition (DB).
+                    //
+                    // When the neighbor is not available we introduce ghost points which are immediately
+                    // removed by substitution. Assume that we are at a pixel C at the top border (not corner)
+                    // and that pixel is assigned a NB = 1. Denoting the pixels C, N, E, S, W we have for C
+                    // the Laplacian
+                    //      1: -4C + N + E + S + W = f(x)
+                    // From NB we have
+                    //      2: (N - S) * 0.5 = 1
+                    // As N is not in the domain we need to get rid of it through substitution. Rewriting 2:
+                    //      N = 2 + S
+                    // and substituting in 1:
+                    //      -4C + (2 + S) + E + S + W = f(x)
+                    //      -4C + E + 2S + W = f(x) - 2
+                    
                     for (int n = 1; n < 5; ++n) {
                         const cv::Point q(x + offsets[n][0], y + offsets[n][1]);
                         
                         if (!bounds.contains(q) || bm(q) == constants::DIRICHLET_BD) {
-                            std::cout << "got neumann" << std::endl;
-                            lhs[n] -= 1.f;
-                            lhs[opposite[n]] += 1.f;
+                            lhs[opposite[n]] += 1.0f;
+                            lhs[n] = 0.f;
                             rhs.row(pid) += 2.f * Eigen::Map<Eigen::VectorXf>(bv.ptr<float>(p.y, p.x), channels);
                         }
                     }
@@ -167,8 +186,12 @@ namespace blend {
                         lhs[center] += lhs[n];
                         lhs[n] = 0.f;
                     } else if (isNeighborDirichlet) {
-                        // Apply Dirichlet boundary condition or keep unknown
-                        // Can be considered a known value, so it is moved to right hand side.
+                        
+                        // Implementation note:
+                        //
+                        // Dirichlet boundary conditions (DB) turn neighbor unknowns into knowns (data) and
+                        // are therefore moved to the right hand side.
+                        
                         rhs.row(pid) -= lhs[n] * Eigen::Map<Eigen::VectorXf>(bv.ptr<float>(q.y, q.x), channels);
                         lhs[n] = 0.f;
                     }
@@ -193,7 +216,6 @@ namespace blend {
 
         Eigen::SparseMatrix<float> A(nUnknowns, nUnknowns);
         A.setFromTriplets(lhsTriplets.begin(), lhsTriplets.end());
-    
 
         Eigen::SparseLU< Eigen::SparseMatrix<float> > solver;
         solver.analyzePattern(A);
