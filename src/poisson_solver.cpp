@@ -127,8 +127,6 @@ namespace blend {
         
         // Loop over domain once. The coefficient matrix A is the same for all
         // channels, the right hand side is channel dependent.
-        
-        std::bitset<3> state;
 
         for (int y = 0; y < f.rows; ++y) {
             for (int x = 0; x < r.cols; ++x) {
@@ -143,63 +141,48 @@ namespace blend {
 
                 // Start coefficients of left hand side. Based on discrete Laplacian with central difference.
                 float lhs[] = { -4.f, 1.f, 1.f, 1.f, 1.f };
-                int qids[5] = { pid, -1, -1, -1, -1 };
-
-                state.set(2, (bm(p) == constants::NEUMANN_BD));
+                
+                const bool hasNeumann = (bm(p) == constants::NEUMANN_BD);
+                
+                if (hasNeumann) {
+                    for (int n = 1; n < 5; ++n) {
+                        const cv::Point q(x + offsets[n][0], y + offsets[n][1]);
+                        
+                        if (!bounds.contains(q) || bm(q) == constants::DIRICHLET_BD) {
+                            std::cout << "got neumann" << std::endl;
+                            lhs[n] -= 1.f;
+                            lhs[opposite[n]] += 1.f;
+                            rhs.row(pid) += 2.f * Eigen::Map<Eigen::VectorXf>(bv.ptr<float>(p.y, p.x), channels);
+                        }
+                    }
+                }
                 
                 for (int n = 1; n < 5; ++n) {
                     const cv::Point q(x + offsets[n][0], y + offsets[n][1]);
-                    const cv::Point qo(x + offsets[opposite[n]][0], y + offsets[opposite[n]][1]);
-
-                    state.set(1, bounds.contains(q));
-                    state.set(0, bounds.contains(qo));
-
-                    switch (state.to_ulong())
-                    {
-                    case 0: //000
-                    case 1: //001
-                    case 4: //100
-                        // Decrease the number of unknowns
-                        // Neighbor is not in domain and we don't have a Neumann boundary, 
-                        // or we have Neumann boundary but the neighbor and opposite neighbor are
-                        // both not in domain.
-                        lhs[center] += 1.f;
+                    
+                    const bool hasNeighbor = bounds.contains(q);
+                    const bool isNeighborDirichlet = hasNeighbor && (bm(q) == constants::DIRICHLET_BD);
+                    
+                    if (!hasNeumann && !hasNeighbor) {
+                        lhs[center] += lhs[n];
                         lhs[n] = 0.f;
-                        break;
-
-                    case 2: //010
-                    case 3: //011
-                    case 6: //110
-                    case 7: //111
+                    } else if (isNeighborDirichlet) {
                         // Apply Dirichlet boundary condition or keep unknown
-                        // We don't have a Neumann boundary and neighbor is in domain.
-                        qids[n] = unknownIdx(q);
-                        lhs[n] += (qids[n] == -1) ? -1.f : 0.f;
-                        if (lhs[n] == 0) {
-                            // Neighbor has Dirichlet boundary condition applied. 
-                            // Can be considered a known value, so it is moved to right hand side.
-                            rhs.row(pid) -= Eigen::Map<Eigen::VectorXf>(bv.ptr<float>(q.y, q.x), channels);
-                        }
-
-                        break;
-
-                    case 5: //101
-                        // Apply Neumann boundary condition on rectangular domain boundaries.                        
-                        lhs[n] -= 1.f;
-                        lhs[opposite[n]] += 1.f;
-                        rhs.row(pid) += 2.f * Eigen::Map<Eigen::VectorXf>(bv.ptr<float>(p.y, p.x), channels);
-
-                        break;
+                        // Can be considered a known value, so it is moved to right hand side.
+                        rhs.row(pid) -= lhs[n] * Eigen::Map<Eigen::VectorXf>(bv.ptr<float>(q.y, q.x), channels);
+                        lhs[n] = 0.f;
                     }
                 }
+
 
                 // Add f to rhs.
                 rhs.row(pid) += Eigen::Map<Eigen::VectorXf>(f.ptr<float>(p.y, p.x), channels);
 
                 // Build triplets for row              
                 for (int n = 0; n < 5; ++n) {
-                    if (lhs[n] != 0) {
-                        lhsTriplets.push_back(Eigen::Triplet<float>(pid, qids[n], lhs[n]));
+                    if (lhs[n] != 0.f) {
+                        const cv::Point q(x + offsets[n][0], y + offsets[n][1]);
+                        lhsTriplets.push_back(Eigen::Triplet<float>(pid, unknownIdx(q), lhs[n]));
                     }
                 }
                     
@@ -210,6 +193,7 @@ namespace blend {
 
         Eigen::SparseMatrix<float> A(nUnknowns, nUnknowns);
         A.setFromTriplets(lhsTriplets.begin(), lhsTriplets.end());
+    
 
         Eigen::SparseLU< Eigen::SparseMatrix<float> > solver;
         solver.analyzePattern(A);

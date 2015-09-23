@@ -32,7 +32,7 @@ void showResult(cv::Mat initial, cv::Mat result)
     result.convertTo(result, CV_8UC1);
 
     float ratio = initial.rows / (float)initial.cols;
-
+    
     cv::resize(initial, initial, cv::Size(400, static_cast<int>(400.f * ratio)), 0, 0, CV_INTER_NN);
     cv::resize(result, result, cv::Size(400, static_cast<int>(400.f * ratio)), 0, 0, CV_INTER_NN);
 
@@ -62,15 +62,15 @@ TEST_CASE("Laplacian-1d")
     cv::Mat result;
     blend::solvePoissonEquations(f, bmask, bvalues, result);
 
+#ifdef BLEND_TESTS_VERBOSE
+    showResult(bvalues, result);    
+#endif
+    
     // Result should be a gradient
     float offset = 255.f / (width - 1);
     for (int i = 0; i < width; ++i) {
         REQUIRE(result.at<float>(0, i) == Approx(i*offset).epsilon(0.01));
     }
-
-#ifdef BLEND_TESTS_VERBOSE
-    showResult(bvalues, result);    
-#endif
 }
 
 TEST_CASE("Laplacian-2d")
