@@ -18,8 +18,10 @@ include_directories(${CMAKE_CURRENT_BINARY_DIR} ${OpenCV_INCLUDE_DIRS} ${EIGEN_I
 add_library(blend 
 	inc/blend/poisson_solver.h
 	inc/blend/clone.h
+	inc/blend/blend.h
 	src/poisson_solver.cpp
 	src/clone.cpp	
+	src/blend.cpp
 )
 	
 target_link_libraries(blend ${OpenCV_LIBRARIES})
@@ -28,6 +30,9 @@ target_link_libraries(blend ${OpenCV_LIBRARIES})
 
 add_executable(seamless_cloning examples/seamless_cloning.cpp)
 target_link_libraries(seamless_cloning blend ${OpenCV_LIBRARIES})
+
+add_executable(seamless_blending examples/seamless_blending.cpp)
+target_link_libraries(seamless_blending blend ${OpenCV_LIBRARIES})
 
 # Tests
 

@@ -17,8 +17,8 @@
  along with Poisson Image Editing.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef POISSON_BLEND_H
-#define POISSON_BLEND_H
+#ifndef POISSON_CLONE_H
+#define POISSON_CLONE_H
 
 #include <opencv2/core/core.hpp>
 
