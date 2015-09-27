@@ -190,7 +190,9 @@ namespace blend {
                         // Implementation note:
                         //
                         // Dirichlet boundary conditions (DB) turn neighbor unknowns into knowns (data) and
-                        // are therefore moved to the right hand side.
+                        // are therefore moved to the right hand side. Alternatively, we could add more
+                        // equations for these pixels setting the lhs 1 and rhs to the Dirichlet value, but
+                        // that would unnecessarily blow up the equation system.
                         
                         rhs.row(pid) -= lhs[n] * Eigen::Map<Eigen::VectorXf>(bv.ptr<float>(q.y, q.x), channels);
                         lhs[n] = 0.f;
